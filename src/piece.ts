@@ -15,12 +15,13 @@ export enum PieceColor {
 export interface Piece {
 	readonly kind: PieceKind
 	readonly color: PieceColor
+	firstMove: boolean
 }
 
 export type Board = (Piece | null)[][]
 
 export function buildPiece(kind: PieceKind, color: PieceColor): Piece {
-	return { kind, color }
+	return { kind, color, firstMove: true }
 }
 
 export function buildBoard(lowColor: PieceColor): Board {
