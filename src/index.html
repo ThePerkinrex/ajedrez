@@ -1,12 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>5D Chess</title>
-</head>
-<body>
-	
-</body>
+
+	<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>5D Chess</title>
+	</head>
+
+	<body>
+		<div id="signin">
+			<label for="username">Username: </label><input type="text" id="username">
+			<button id="username-submit">Go!</button>
+		</div>
+		<div id="joingame" class="hidden">
+			<label for="gameid">Join game: </label><input type="text" id="gameid"><button id="gameid-submit">Join</button>
+			<button id="newgame">New game</button>
+		</div>
+
+		<span id="current-game"></span>
+		<div id="waiting" class="hidden">Waiting for other player</div>
+	</body>
+
 </html>

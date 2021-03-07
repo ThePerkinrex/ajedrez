@@ -20,6 +20,7 @@
   "homepage": "https://github.com/ThePerkinrex/ajedrez#readme",
   "devDependencies": {
     "@types/p5": "^0.9.1",
+    "@vercel/node": "^1.9.0",
     "css-loader": "^5.1.1",
     "html-loader": "^2.1.1",
     "html-webpack-plugin": "^5.2.0",
@@ -30,6 +31,8 @@
     "webpack-cli": "^4.5.0"
   },
   "dependencies": {
+    "firebase": "^8.2.10",
+    "firebase-admin": "^9.5.0",
     "p5": "^1.2.0"
   }
 }
