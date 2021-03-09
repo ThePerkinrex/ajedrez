@@ -14,6 +14,7 @@ type Move = undefined | { startX: number, startY: number, piece: piece.Piece, pl
 let other_player = ''
 let current_player = ''
 let lowColor: piece.PieceColor;
+let currentLow: boolean;
 
 
 if (!Array.prototype.indexOf)
@@ -67,10 +68,14 @@ const sketch = (p: p5): void => {
 
 	p.draw = (): void => {
 		p.background(36, 124, 22);
+		p.push();
 		p.fill(255);
+		p.textStyle(currentLow ? p.NORMAL : p.BOLD)
 		p.text(other_player, (p.width - p.textWidth(other_player)) / 2, 5 + p.textAscent());
 		p.fill(255);
+		p.textStyle(currentLow ? p.BOLD : p.NORMAL)
 		p.text(current_player, (p.width - p.textWidth(current_player)) / 2, p.height - 5);
+		p.pop();
 		for (let i = 0; i < eatenPieces.top.length; i++) {
 			let img = loadPieceImg(p, eatenPieces.top[i]);
 			// console.log('Loading', currentlyMoving.piece, img)
@@ -107,6 +112,7 @@ const sketch = (p: p5): void => {
 	let currentlyMoving: Move = undefined;
 
 	function movePiece(from: string, to: string) {
+		currentLow = !currentLow;
 		let from_local = toLocalFromGlobal(from, lowColor)
 		let to_local = toLocalFromGlobal(to, lowColor)
 		if (board[to_local.y][to_local.x] !== null) {
@@ -146,12 +152,13 @@ const sketch = (p: p5): void => {
 				// board[y][x].firstMove = false
 				move(document.getElementById('current-game').innerText, {
 					from: fromLocalToGlobal(currentlyMoving.startX, currentlyMoving.startY, lowColor),
-					to: fromLocalToGlobal(x, y, lowColor)
+					to: fromLocalToGlobal(x, y, lowColor),
+					color: lowColor
 				})
 				currentlyMoving = undefined
 			}
 
-		} else if (board[y][x] !== null && board[y][x].color === lowColor) {
+		} else if (currentLow && board[y][x] !== null && board[y][x].color === lowColor) {
 			currentlyMoving = {
 				startX: x,
 				startY: y,
@@ -173,6 +180,7 @@ export function start(o: string, c: string, low_color: piece.PieceColor) {
 	other_player = o
 	current_player = c
 	lowColor = low_color
+	currentLow = low_color == piece.PieceColor.Light
 	new p5(sketch);
 }
 

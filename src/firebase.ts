@@ -147,7 +147,8 @@ export function leaveGame(code: string) {
 
 export interface Move {
 	from: string,
-	to: string
+	to: string,
+	color: PieceColor
 }
 
 export function onMove(code: string, onMove: (m: Move) => void) {
