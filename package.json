@@ -33,6 +33,6 @@
   "dependencies": {
     "firebase": "^8.2.10",
     "firebase-admin": "^9.5.0",
-    "p5": "^1.2.0"
+    "p5": "^0.4.22"
   }
 }

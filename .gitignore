@@ -108,3 +108,6 @@ dist
 
 .vercel
 ajedrez.json
+public/index.html
+public/bundle.js
+public/main.css
