@@ -18,39 +18,6 @@ export interface Piece {
 	firstMove: boolean
 }
 
-export type Board = (Piece | null)[][]
-
-export function buildPiece(kind: PieceKind, color: PieceColor): Piece {
-	return { kind, color, firstMove: true }
-}
-
-export function buildBoard(lowColor: PieceColor): Board {
-	let topColor = PieceColor.Dark
-	if (lowColor == PieceColor.Dark) {
-		topColor = PieceColor.Light
-	}
-	return [
-		[buildPiece(PieceKind.Rook, topColor), buildPiece(PieceKind.Knight, topColor), buildPiece(PieceKind.Bishop, topColor), buildPiece(PieceKind.Queen, topColor), buildPiece(PieceKind.King, topColor), buildPiece(PieceKind.Bishop, topColor), buildPiece(PieceKind.Knight, topColor), buildPiece(PieceKind.Rook, topColor)],
-		[buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor)],
-		[null, null, null, null, null, null, null, null],
-		[null, null, null, null, null, null, null, null],
-		[null, null, null, null, null, null, null, null],
-		[null, null, null, null, null, null, null, null],
-		[buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor)],
-		[buildPiece(PieceKind.Rook, lowColor), buildPiece(PieceKind.Knight, lowColor), buildPiece(PieceKind.Bishop, lowColor), buildPiece(PieceKind.Queen, lowColor), buildPiece(PieceKind.King, lowColor), buildPiece(PieceKind.Bishop, lowColor), buildPiece(PieceKind.Knight, lowColor), buildPiece(PieceKind.Rook, lowColor)],
-	]
-	// return [
-	// 	[buildPiece(PieceKind.Pawn, lowColor), null, null, null, null, null, null, null],
-	// 	[null, null, null, null, null, null, null, null],
-	// 	[null, null, null, null, null, null, null, null],
-	// 	[null, null, null, null, null, null, null, null],
-	// 	[null, null, null, null, null, null, null, null],
-	// 	[null, null, null, null, null, null, null, null],
-	// 	[null, null, null, null, null, null, null, null],
-	// 	[null, null, null, null, null, null, null, null],
-	// ]
-}
-
 export function getImagePath(p: Piece): string {
 
 	let kind_letter: string;

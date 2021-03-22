@@ -1,8 +1,8 @@
 
 import * as p5 from 'p5';
-import * as piece from './piece';
-import { PieceKind } from './piece';
+import { PieceKind, Piece, PieceColor, getImagePath } from './piece';
 import { onMove, move } from './firebase';
+import { Position, Board, toLocalFromGlobal, fromLocalToGlobal, containsPosition } from './moves';
 
 const SQUARE_SIZE = 50;
 const PADDING = 180;
@@ -10,11 +10,16 @@ const SIDE_PADDING = 120;
 const WIDTH = SQUARE_SIZE * 8 + 10 + SIDE_PADDING * 2;
 const REDUCING_N = 10;
 const REDUCING_FACTOR = SQUARE_SIZE - (WIDTH - SIDE_PADDING * 2) / REDUCING_N;
-type Move = undefined | { startX: number, startY: number, piece: piece.Piece, placeable: string[] };
+type Move = undefined | { start: Position, piece: Piece, placeable: Position[] };
 let other_player = ''
 let current_player = ''
-let lowColor: piece.PieceColor;
+let lowColor: PieceColor;
 let currentLow: boolean;
+
+// let check: {
+// 	pos: Position,
+// 	low: boolean,
+// } | undefined
 
 
 if (!Array.prototype.indexOf)
@@ -39,13 +44,29 @@ if (!Array.prototype.indexOf)
 		}
 	})(Object, Math.max, Math.min)
 
+function copy<T extends any>(aObject: T): T {
+	if (!aObject) {
+		return aObject;
+	}
+
+	let v;
+	let bObject: any = Array.isArray(aObject) ? [] : {};
+	for (const k in aObject) {
+		v = aObject[k];
+		bObject[k] = (typeof v === "object") ? copy(v) : v;
+	}
+
+	return bObject;
+}
+
 const sketch = (p: p5): void => {
 	//   const scene = new Scene();
-	let board: piece.Board;
+	let board: Board;
 	let eatenPieces: {
-		top: piece.Piece[],
-		bottom: piece.Piece[]
+		top: Piece[],
+		bottom: Piece[]
 	} = { top: [], bottom: [] }
+
 
 	// p.preload = (): void => { };
 
@@ -53,7 +74,7 @@ const sketch = (p: p5): void => {
 		let cnv = p.createCanvas(WIDTH, SQUARE_SIZE * 8 + 10 + PADDING * 2);
 		cnv.mousePressed(onPress);
 		p.noStroke();
-		board = piece.buildBoard(lowColor);
+		board = new Board(lowColor)
 		p.textSize(20);
 		// p.background(0);
 		// p.loadImage('/pieces/Chess_bdt45.png', (i)=>{console.log('LOaded image');p.image(i, 0, 0, SQUARE_SIZE, SQUARE_SIZE)})
@@ -69,12 +90,30 @@ const sketch = (p: p5): void => {
 	p.draw = (): void => {
 		p.background(36, 124, 22);
 		p.push();
+		let top_text = other_player;
+		if (board.isKingInCheck(board.topKing, board.get(board.topKing), lowColor)) {
+			top_text += ' (In check)'
+		}
 		p.fill(255);
+		if (!currentLow) {
+			p.strokeWeight(5)
+			p.stroke(0)
+		}
 		p.textStyle(currentLow ? p.NORMAL : p.BOLD)
-		p.text(other_player, (p.width - p.textWidth(other_player)) / 2, 5 + p.textAscent());
+		p.text(top_text, (p.width - p.textWidth(top_text)) / 2, 5 + p.textAscent());
+		p.pop();
+		p.push();
+		let bottom_text = current_player;
+		if (board.isKingInCheck(board.lowKing, board.get(board.lowKing), lowColor)) {
+			bottom_text += ' (In check)'
+		}
 		p.fill(255);
+		if (currentLow) {
+			p.strokeWeight(5)
+			p.stroke(0)
+		}
 		p.textStyle(currentLow ? p.BOLD : p.NORMAL)
-		p.text(current_player, (p.width - p.textWidth(current_player)) / 2, p.height - 5);
+		p.text(bottom_text, (p.width - p.textWidth(bottom_text)) / 2, p.height - 5);
 		p.pop();
 		for (let i = 0; i < eatenPieces.top.length; i++) {
 			let img = loadPieceImg(p, eatenPieces.top[i]);
@@ -112,21 +151,11 @@ const sketch = (p: p5): void => {
 	let currentlyMoving: Move = undefined;
 
 	function movePiece(from: string, to: string) {
-		currentLow = !currentLow;
-		let from_local = toLocalFromGlobal(from, lowColor)
-		let to_local = toLocalFromGlobal(to, lowColor)
-		if (board[to_local.y][to_local.x] !== null) {
-			let top_eater = board[to_local.y][to_local.x].color === lowColor
-			if (top_eater) {
-				eatenPieces.top.push(board[to_local.y][to_local.x])
-			} else {
-
-				eatenPieces.bottom.push(board[to_local.y][to_local.x])
-			}
-		}
-		board[to_local.y][to_local.x] = board[from_local.y][from_local.x]
-		board[from_local.y][from_local.x] = null
-		board[to_local.y][to_local.x].firstMove = false
+		// let was_in_check = check !== undefined
+		movePieceGeneric(toLocalFromGlobal(from, lowColor), toLocalFromGlobal(to, lowColor), board, eatenPieces)
+		// if (was_in_check) {
+		// 	check = undefined // The only moves allowed are the ones that stop the check
+		// }
 	}
 
 	function onPress() {
@@ -137,7 +166,7 @@ const sketch = (p: p5): void => {
 			return
 		}
 		if (currentlyMoving !== undefined) {
-			if (currentlyMoving.placeable.indexOf(x + ':' + y) > -1) {
+			if (containsPosition(currentlyMoving.placeable, { x, y })) {
 				// if (board[y][x] !== null) {
 				// 	let top_eater = board[y][x].color === lowColor
 				// 	if (top_eater) {
@@ -151,19 +180,23 @@ const sketch = (p: p5): void => {
 				// board[currentlyMoving.startY][currentlyMoving.startX] = null
 				// board[y][x].firstMove = false
 				move(document.getElementById('current-game').innerText, {
-					from: fromLocalToGlobal(currentlyMoving.startX, currentlyMoving.startY, lowColor),
-					to: fromLocalToGlobal(x, y, lowColor),
+					from: fromLocalToGlobal(currentlyMoving.start, lowColor),
+					to: fromLocalToGlobal({ x, y }, lowColor),
 					color: lowColor
 				})
 				currentlyMoving = undefined
 			}
 
-		} else if (currentLow && board[y][x] !== null && board[y][x].color === lowColor) {
+		} else if (currentLow && board.get({ x, y }) !== null && board.get({ x, y }).color === lowColor) {
+			// if (check !== undefined && check.low == currentLow) {
+			// 	if (board[y][x].kind !== PieceKind.King) {
+			// 		return
+			// 	}
+			// }
 			currentlyMoving = {
-				startX: x,
-				startY: y,
-				piece: board[y][x],
-				placeable: getAllowedPlacements(board, x, y, lowColor)
+				start: { x, y },
+				piece: board.get({ x, y }),
+				placeable: board.possibleMoves({ x, y }, board.get({ x, y }), lowColor)
 			}
 		}
 
@@ -176,11 +209,48 @@ const sketch = (p: p5): void => {
 	}
 };
 
-export function start(o: string, c: string, low_color: piece.PieceColor) {
+function movePieceGeneric(from: Position, to: Position, board: Board, eatenPieces: {
+	top: Piece[],
+	bottom: Piece[]
+} = { top: [], bottom: [] }, set_check = true) {
+	currentLow = !currentLow;
+	let from_local = from
+	let to_local = to
+	if (board.get(to_local) !== null) {
+		let top_eater = board.get(to_local).color === lowColor
+		if (top_eater) {
+			eatenPieces.top.push(board.get(to_local))
+		} else {
+
+			eatenPieces.bottom.push(board.get(to_local))
+		}
+	}
+	let queenRow = (((board.get(from_local).color === lowColor) ? 0 : 7) === to_local.y) && board.get(from_local).kind === PieceKind.Pawn
+	console.log(queenRow)
+	board.set(to_local,queenRow? {...board.get(from_local), kind: PieceKind.Queen} : board.get(from_local))
+	board.set(from_local, null)
+	board.get(to_local).firstMove = false
+	board.move(from_local, to_local) // Notify the board of a piece moved (for kings)
+	// Check for check / checkmate
+	// if (set_check) {
+	// 	for (let p of board.possibleMoves(to_local, board.get(to_local), lowColor)) {
+	// 		// let [x, y] = p.split(':').map((s) => parseInt(s))
+	// 		// console.log('Check', to_local.x, to_local.y, x, y)
+	// 		if (board.get(p) !== null && board.get(p).kind == PieceKind.King && board.get(p).color !== board.get(to_local).color) {
+	// 			check = {
+	// 				pos: p, low: board.get(p).color === lowColor
+	// 			}
+	// 		}
+	// 	}
+	// }
+
+}
+
+export function start(o: string, c: string, low_color: PieceColor) {
 	other_player = o
 	current_player = c
 	lowColor = low_color
-	currentLow = low_color == piece.PieceColor.Light
+	currentLow = low_color == PieceColor.Light
 	new p5(sketch);
 }
 
@@ -190,8 +260,8 @@ interface PieceImages {
 
 let pieceImages: PieceImages = {};
 
-function loadPieceImg(p: p5, pi: piece.Piece, suffix = '', f = (_: p5.Image) => { }): p5.Image | undefined {
-	let path = piece.getImagePath(pi);
+function loadPieceImg(p: p5, pi: Piece, suffix = '', f = (_: p5.Image) => { }): p5.Image | undefined {
+	let path = getImagePath(pi);
 	if (pieceImages[path + suffix] === undefined) {
 		pieceImages[path + suffix] = 'loading'
 		p.loadImage(path, (i) => {
@@ -206,11 +276,11 @@ function loadPieceImg(p: p5, pi: piece.Piece, suffix = '', f = (_: p5.Image) => 
 
 }
 
-function drawBoard(p: p5, b: piece.Board, m: Move) {
-	let inverted = lowColor === piece.PieceColor.Dark
+function drawBoard(p: p5, b: Board, m: Move) {
+	let inverted = lowColor === PieceColor.Dark
 	let first = true;
 	let dark_start = false;
-	let pos: string[] = [];
+	let pos: Position[] = [];
 	if (m !== undefined) {
 		pos = m.placeable
 	}
@@ -222,13 +292,14 @@ function drawBoard(p: p5, b: piece.Board, m: Move) {
 		p.fill(255)
 		p.text(String.fromCharCode(i + 97), i * SQUARE_SIZE + 5 + SIDE_PADDING + (SQUARE_SIZE - p.textWidth(String.fromCharCode(i + 97))) / 2, PADDING - 10)
 		for (let j = 0; j < 8; j++) {
+			let position = { x: i, y: j }
 			if (first) {
 				p.fill(255)
 				let n = (inverted ? 7 - j : j) + 1
 				p.text(n, SIDE_PADDING - 5 - p.textWidth(n.toString()), j * SQUARE_SIZE + 5 + PADDING + (SQUARE_SIZE + p.textAscent()) / 2)
 
 			}
-			if (pos.indexOf(i + ':' + j) > -1) {
+			if (containsPosition(pos, position)) {
 				p.fill(36, 124, 22)
 			} else {
 				if (dark) {
@@ -240,8 +311,8 @@ function drawBoard(p: p5, b: piece.Board, m: Move) {
 			}
 			dark = !dark
 			p.rect(i * SQUARE_SIZE + 5 + SIDE_PADDING, j * SQUARE_SIZE + 5 + PADDING, SQUARE_SIZE, SQUARE_SIZE);
-			if (b[j][i] !== null) {
-				let img = loadPieceImg(p, b[j][i]);
+			if (b.get(position) !== null) {
+				let img = loadPieceImg(p, b.get(position));
 				if (img !== undefined) {
 					p.image(img, i * SQUARE_SIZE + 5 + SIDE_PADDING, j * SQUARE_SIZE + 5 + PADDING, SQUARE_SIZE, SQUARE_SIZE)
 				}
@@ -250,275 +321,4 @@ function drawBoard(p: p5, b: piece.Board, m: Move) {
 		}
 		first = false
 	}
-}
-
-function getAllowedPlacements(b: piece.Board, x: number, y: number, lowColor: piece.PieceColor): string[] {
-	let res: string[] = []
-	let p = b[y][x]
-	switch (p.kind) {
-		case PieceKind.King:
-			pushIfPosAvailable(b, p, x - 1, y, res)
-			pushIfPosAvailable(b, p, x + 1, y, res)
-			pushIfPosAvailable(b, p, x, y - 1, res)
-			pushIfPosAvailable(b, p, x, y + 1, res)
-			pushIfPosAvailable(b, p, x - 1, y + 1, res)
-			pushIfPosAvailable(b, p, x + 1, y + 1, res)
-			pushIfPosAvailable(b, p, x - 1, y - 1, res)
-			pushIfPosAvailable(b, p, x + 1, y - 1, res)
-			break;
-
-		case PieceKind.Queen:
-			for (let s = x - 1; s >= 0; s--) {
-				if (b[y][s] !== null) {
-					if (b[y][s].color !== p.color) {
-						pushIfPosAvailable(b, p, s, y, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, s, y, res)
-			}
-			for (let s = x + 1; s < 8; s++) {
-				if (b[y][s] !== null) {
-					if (b[y][s].color !== p.color) {
-						pushIfPosAvailable(b, p, s, y, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, s, y, res)
-			}
-			for (let s = y - 1; s >= 0; s--) {
-				if (b[s][x] !== null) {
-					if (b[s][x].color !== p.color) {
-						pushIfPosAvailable(b, p, x, s, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, x, s, res)
-			}
-			for (let s = y + 1; s < 8; s++) {
-				if (b[s][x] !== null) {
-					if (b[s][x].color !== p.color) {
-						pushIfPosAvailable(b, p, x, s, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, x, s, res)
-			}
-			{
-				let xdir = 1;
-				let ydir = 1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-				xdir = -1;
-				ydir = 1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-				xdir = -1;
-				ydir = -1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-				xdir = 1;
-				ydir = -1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-			}
-
-			break;
-
-		case PieceKind.Knight:
-			pushIfPosAvailable(b, p, x - 1, y + 2, res)
-			pushIfPosAvailable(b, p, x + 1, y + 2, res)
-			pushIfPosAvailable(b, p, x - 1, y - 2, res)
-			pushIfPosAvailable(b, p, x + 1, y - 2, res)
-			pushIfPosAvailable(b, p, x - 2, y + 1, res)
-			pushIfPosAvailable(b, p, x + 2, y + 1, res)
-			pushIfPosAvailable(b, p, x - 2, y - 1, res)
-			pushIfPosAvailable(b, p, x + 2, y - 1, res)
-			break;
-
-		case PieceKind.Rook:
-			for (let s = x - 1; s >= 0; s--) {
-				if (b[y][s] !== null) {
-					if (b[y][s].color !== p.color) {
-						pushIfPosAvailable(b, p, s, y, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, s, y, res)
-			}
-			for (let s = x + 1; s < 8; s++) {
-				if (b[y][s] !== null) {
-					if (b[y][s].color !== p.color) {
-						pushIfPosAvailable(b, p, s, y, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, s, y, res)
-			}
-			for (let s = y - 1; s >= 0; s--) {
-				if (b[s][x] !== null) {
-					if (b[s][x].color !== p.color) {
-						pushIfPosAvailable(b, p, x, s, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, x, s, res)
-			}
-			for (let s = y + 1; s < 8; s++) {
-				if (b[s][x] !== null) {
-					if (b[s][x].color !== p.color) {
-						pushIfPosAvailable(b, p, x, s, res)
-					}
-					break
-				}
-				pushIfPosAvailable(b, p, x, s, res)
-			}
-			break;
-
-		case PieceKind.Bishop:
-			{
-				let xdir = 1;
-				let ydir = 1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-				xdir = -1;
-				ydir = 1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-				xdir = -1;
-				ydir = -1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-				xdir = 1;
-				ydir = -1;
-				for (let s = 1; x + s * xdir >= 0 && x + s * xdir < 8 && y + s * ydir >= 0 && y + s * ydir < 8; s++) {
-					let newx = x + s * xdir;
-					let newy = y + s * ydir;
-					if (b[newy][newx] !== null) {
-						if (b[newy][newx].color !== p.color) {
-							pushIfPosAvailable(b, p, newx, newy, res)
-						}
-						break
-					}
-					pushIfPosAvailable(b, p, newx, newy, res)
-				}
-			}
-			break;
-
-		case PieceKind.Pawn:
-			let dir = 1;
-			if (lowColor == p.color) {
-				dir = -1
-			}
-			pushIfPosAvailable(b, p, x, y + dir, res, false)
-			if (p.firstMove && b[y + dir][x] === null) {
-				pushIfPosAvailable(b, p, x, y + dir * 2, res, false)
-			}
-			if (b[y + dir][x + 1] !== null) {
-				pushIfPosAvailable(b, p, x + 1, y + dir, res)
-			}
-			if (b[y + dir][x - 1] !== null) {
-				pushIfPosAvailable(b, p, x - 1, y + dir, res)
-			}
-			break;
-	}
-	return res;
-
-}
-
-function pushIfPosAvailable(b: piece.Board, p: piece.Piece, x: number, y: number, l: string[], eatingAllowed = true) {
-	if (x >= 8 || x < 0 || y >= 8 || y < 0) {
-		return // Disable invalid positions
-	}
-	// TODO Check for checkmates
-	// console.log(x, y)
-	if (b[y][x] === null) { // Is position empty
-		l.push(x + ':' + y)
-	} else {
-		if (b[y][x].color !== p.color && eatingAllowed) {
-			l.push(x + ':' + y)
-		}
-	}
-}
-
-//   a-h
-// 8 BLACK
-// |
-// 1 WHITE
-
-function fromLocalToGlobal(x: number, y: number, lowColor: piece.PieceColor): string {
-	let inverted = lowColor === piece.PieceColor.Dark
-	let letter = String.fromCharCode(x + 97) // a in ASCII
-	let number = (inverted ? 7 - y : y) + 1
-	return letter + number
-}
-
-function toLocalFromGlobal(s: string, lowColor: piece.PieceColor): { x: number, y: number } {
-	let inverted = lowColor === piece.PieceColor.Dark
-	let x = s.charCodeAt(0) - 97 // a in ascii
-	let y = inverted ? 7 - (parseInt(s[1]) -1) : parseInt(s[1])-1
-	return { x, y }
 }
