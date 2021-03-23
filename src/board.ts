@@ -44,20 +44,20 @@ if (!Array.prototype.indexOf)
 		}
 	})(Object, Math.max, Math.min)
 
-function copy<T extends any>(aObject: T): T {
-	if (!aObject) {
-		return aObject;
-	}
+// function copy<T extends any>(aObject: T): T {
+// 	if (!aObject) {
+// 		return aObject;
+// 	}
 
-	let v;
-	let bObject: any = Array.isArray(aObject) ? [] : {};
-	for (const k in aObject) {
-		v = aObject[k];
-		bObject[k] = (typeof v === "object") ? copy(v) : v;
-	}
+// 	let v;
+// 	let bObject: any = Array.isArray(aObject) ? [] : {};
+// 	for (const k in aObject) {
+// 		v = aObject[k];
+// 		bObject[k] = (typeof v === "object") ? copy(v) : v;
+// 	}
 
-	return bObject;
-}
+// 	return bObject;
+// }
 
 const sketch = (p: p5): void => {
 	//   const scene = new Scene();
@@ -74,7 +74,7 @@ const sketch = (p: p5): void => {
 		let cnv = p.createCanvas(WIDTH, SQUARE_SIZE * 8 + 10 + PADDING * 2);
 		cnv.mousePressed(onPress);
 		p.noStroke();
-		board = new Board(lowColor)
+		board = Board.default(lowColor)
 		p.textSize(20);
 		// p.background(0);
 		// p.loadImage('/pieces/Chess_bdt45.png', (i)=>{console.log('LOaded image');p.image(i, 0, 0, SQUARE_SIZE, SQUARE_SIZE)})
@@ -91,7 +91,7 @@ const sketch = (p: p5): void => {
 		p.background(36, 124, 22);
 		p.push();
 		let top_text = other_player;
-		if (board.isKingInCheck(board.topKing, board.get(board.topKing), lowColor)) {
+		if (board.isKingInCheck(board.topKing, board.get(board.topKing))) {
 			top_text += ' (In check)'
 		}
 		p.fill(255);
@@ -104,7 +104,7 @@ const sketch = (p: p5): void => {
 		p.pop();
 		p.push();
 		let bottom_text = current_player;
-		if (board.isKingInCheck(board.lowKing, board.get(board.lowKing), lowColor)) {
+		if (board.isKingInCheck(board.lowKing, board.get(board.lowKing))) {
 			bottom_text += ' (In check)'
 		}
 		p.fill(255);

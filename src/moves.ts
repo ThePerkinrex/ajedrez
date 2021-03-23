@@ -41,16 +41,20 @@ enum Direction2Dim {
 }
 
 export class Board {
-	private pieces: Piece[][] | null
+	private pieces: (Piece | null)[][]
 	public topKing: Position
 	public lowKing: Position
+	private lowColor: PieceColor
 
-	constructor(lowColor: PieceColor) {
+	private constructor() { }
+
+	static default(lowColor: PieceColor): Board {
+		let r = new Board();
 		let topColor = PieceColor.Dark
 		if (lowColor == PieceColor.Dark) {
 			topColor = PieceColor.Light
 		}
-		this.pieces = [
+		r.pieces = [
 			[buildPiece(PieceKind.Rook, topColor), buildPiece(PieceKind.Knight, topColor), buildPiece(PieceKind.Bishop, topColor), buildPiece(PieceKind.Queen, topColor), buildPiece(PieceKind.King, topColor), buildPiece(PieceKind.Bishop, topColor), buildPiece(PieceKind.Knight, topColor), buildPiece(PieceKind.Rook, topColor)],
 			[buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor), buildPiece(PieceKind.Pawn, topColor)],
 			[null, null, null, null, null, null, null, null],
@@ -60,17 +64,33 @@ export class Board {
 			[buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor)],
 			[buildPiece(PieceKind.Rook, lowColor), buildPiece(PieceKind.Knight, lowColor), buildPiece(PieceKind.Bishop, lowColor), buildPiece(PieceKind.Queen, lowColor), buildPiece(PieceKind.King, lowColor), buildPiece(PieceKind.Bishop, lowColor), buildPiece(PieceKind.Knight, lowColor), buildPiece(PieceKind.Rook, lowColor)],
 		]
-		this.topKing = {x: 4, y: 0}
-		this.lowKing = {x: 4, y: 7}
+		r.topKing = { x: 4, y: 0 }
+		r.lowKing = { x: 4, y: 7 }
+		r.lowColor = lowColor
+		return r
+	}
+
+	private static boardBuilder(pieces: (Piece | null)[][], topKing: Position, lowKing: Position, lowColor: PieceColor): Board {
+		let r = new Board();
+		r.pieces = pieces
+		r.topKing = topKing
+		r.lowKing = lowKing
+		r.lowColor = lowColor
+		return r
+	}
+
+
+	clone(): Board {
+		return Board.boardBuilder(JSON.parse(JSON.stringify(this.pieces)), JSON.parse(JSON.stringify(this.topKing)), JSON.parse(JSON.stringify(this.lowKing)), this.lowColor)
 	}
 
 	move(from: Position, to: Position) {
 		if (positionEquals(from, this.topKing)) {
-			this.topKing = {...to}
+			this.topKing = { ...to }
 		}
 
 		if (positionEquals(from, this.lowKing)) {
-			this.lowKing = {...to}
+			this.lowKing = { ...to }
 		}
 	}
 
@@ -90,20 +110,42 @@ export class Board {
 		this.set(p2, a)
 	}
 
-	private isPositionValid(pos: Position, p: Piece): boolean {
+	private isPositionValid(oldpos: Position, pos: Position, p: Piece, canEat: boolean = true): boolean {
 		let a = this.get(pos)
-		if (a !== null && a.color === p.color) {
-			return false
+		if (a !== null) {
+			if (!canEat) return false
+			if (a.color === p.color) return false
 		}
+		
 		return true
 	}
 
-	private inBounds(pos: Position, relPos: Position, p: Piece): Position | null {
+	willKingBeInCheck(oldpos: Position, newpos: Position): boolean {
+		let boardClone = this.clone()
+		let p = boardClone.get(oldpos)
+		boardClone.set(oldpos, null)
+		boardClone.set(newpos, p)
+		boardClone.move(oldpos, newpos)
+		if (p.color === this.lowColor) {
+			console.log(boardClone.lowKing, boardClone.get(boardClone.lowKing))
+			if (boardClone.isKingInCheck(boardClone.lowKing, boardClone.get(boardClone.lowKing))) {
+				return true
+			}
+		}else {
+			console.log(boardClone.topKing, boardClone.get(boardClone.topKing))
+			if (boardClone.isKingInCheck(boardClone.topKing, boardClone.get(boardClone.topKing))) {
+				return true
+			}
+		}
+		return false
+	}
+
+	private inBounds(pos: Position, relPos: Position, p: Piece, canEat: boolean = true): Position | null {
 		let newX = pos.x + relPos.x;
 		let newY = pos.y + relPos.y;
 		if (newX >= 0 && newX < 8 && newY >= 0 && newY < 8) {
 			let newPos = { x: newX, y: newY }
-			if (this.isPositionValid(newPos, p))
+			if (this.isPositionValid(pos, newPos, p, canEat))
 				return newPos
 			else
 				return null
@@ -112,8 +154,8 @@ export class Board {
 		}
 	}
 
-	private pushIfInBounds(pos: Position, relPos: Position, p: Piece, l: Position[]) {
-		let r = this.inBounds(pos, relPos, p)
+	private pushIfInBounds(pos: Position, relPos: Position, p: Piece, l: Position[], canEat: boolean = true) {
+		let r = this.inBounds(pos, relPos, p, canEat)
 		if (r !== null) {
 			l.push(r)
 		}
@@ -128,7 +170,7 @@ export class Board {
 			let relPos = { x: 0, y: 0 }
 			relPos[i] = p - pos[i]
 			let newPos = addPositions(pos, relPos)
-			if (this.isPositionValid(newPos, piece)) {
+			if (this.isPositionValid(pos, newPos, piece)) {
 				l.push(newPos)
 			}
 			if (this.get(newPos) !== null) {
@@ -150,7 +192,7 @@ export class Board {
 			let newX = i * xdir + pos.x
 			let newY = i * ydir + pos.y
 			let newPos = { x: newX, y: newY }
-			if (this.isPositionValid(newPos, piece)) {
+			if (this.isPositionValid(pos, newPos, piece)) {
 				l.push(newPos)
 			}
 			if (this.get(newPos) !== null) {
@@ -165,8 +207,8 @@ export class Board {
 	possibleMoves(pos: Position, piece: Piece, lowColor: PieceColor): Position[] {
 		let r: Position[] = []
 		let t = this
-		function pushIfInBounds(relPos: Position, l: Position[]) {
-			t.pushIfInBounds(pos, relPos, piece, l)
+		function pushIfInBounds(relPos: Position, l: Position[], canEat: boolean = true) {
+			t.pushIfInBounds(pos, relPos, piece, l, canEat)
 		}
 
 		switch (piece.kind) {
@@ -220,9 +262,9 @@ export class Board {
 
 			case PieceKind.Pawn:
 				let dir = lowColor === piece.color ? -1 : +1
-				pushIfInBounds({ x: 0, y: dir }, r)
+				pushIfInBounds({ x: 0, y: dir }, r, false)
 				if (piece.firstMove) {
-					pushIfInBounds({ x: 0, y: dir * 2 }, r)
+					pushIfInBounds({ x: 0, y: dir * 2 }, r, false)
 				}
 				let left = { x: -1, y: dir }
 				let leftPos = this.inBounds(pos, left, piece)
@@ -244,10 +286,11 @@ export class Board {
 
 				break;
 		}
+		r = r.filter(newpos => !this.willKingBeInCheck(pos, newpos))
 		return r
 	}
 
-	isKingInCheck(pos: Position, piece: Piece, lowColor: PieceColor): boolean {
+	isKingInCheck(pos: Position, piece: Piece): boolean {
 		// A king puts in check another king?
 		// {
 		// 	let r: Position[] = []
@@ -270,14 +313,14 @@ export class Board {
 		{
 			let r = false
 			let t = this
-			this.slide1Dir(pos, Direction1Dim.X, +1, {...piece, kind: PieceKind.Rook}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
-			this.slide1Dir(pos, Direction1Dim.X, -1, {...piece, kind: PieceKind.Rook}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
-			this.slide1Dir(pos, Direction1Dim.Y, -1, {...piece, kind: PieceKind.Rook}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
-			this.slide1Dir(pos, Direction1Dim.Y, +1, {...piece, kind: PieceKind.Rook}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
-			this.slide2Dir(pos, Direction2Dim.Positive, +1, {...piece, kind: PieceKind.Bishop}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
-			this.slide2Dir(pos, Direction2Dim.Positive, -1, {...piece, kind: PieceKind.Bishop}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
-			this.slide2Dir(pos, Direction2Dim.Negative, +1, {...piece, kind: PieceKind.Bishop}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
-			this.slide2Dir(pos, Direction2Dim.Negative, -1, {...piece, kind: PieceKind.Bishop}, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide1Dir(pos, Direction1Dim.X, +1, { ...piece, kind: PieceKind.Rook }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide1Dir(pos, Direction1Dim.X, -1, { ...piece, kind: PieceKind.Rook }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide1Dir(pos, Direction1Dim.Y, -1, { ...piece, kind: PieceKind.Rook }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide1Dir(pos, Direction1Dim.Y, +1, { ...piece, kind: PieceKind.Rook }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Rook || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide2Dir(pos, Direction2Dim.Positive, +1, { ...piece, kind: PieceKind.Bishop }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide2Dir(pos, Direction2Dim.Positive, -1, { ...piece, kind: PieceKind.Bishop }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide2Dir(pos, Direction2Dim.Negative, +1, { ...piece, kind: PieceKind.Bishop }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
+			this.slide2Dir(pos, Direction2Dim.Negative, -1, { ...piece, kind: PieceKind.Bishop }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
 			if (r) {
 				return true
 			}
@@ -285,14 +328,14 @@ export class Board {
 
 		{
 			let r: Position[] = []
-			this.pushIfInBounds(pos, { x: -1, y: +2 }, {...piece, kind: PieceKind.Knight}, r)
-			this.pushIfInBounds(pos, { x: +1, y: +2 }, {...piece, kind: PieceKind.Knight}, r)
-			this.pushIfInBounds(pos, { x: -1, y: -2 }, {...piece, kind: PieceKind.Knight}, r)
-			this.pushIfInBounds(pos, { x: +1, y: -2 }, {...piece, kind: PieceKind.Knight}, r)
-			this.pushIfInBounds(pos, { x: +2, y: -1 }, {...piece, kind: PieceKind.Knight}, r)
-			this.pushIfInBounds(pos, { x: +2, y: +1 }, {...piece, kind: PieceKind.Knight}, r)
-			this.pushIfInBounds(pos, { x: -2, y: -1 }, {...piece, kind: PieceKind.Knight}, r)
-			this.pushIfInBounds(pos, { x: -2, y: +1 }, {...piece, kind: PieceKind.Knight}, r)
+			this.pushIfInBounds(pos, { x: -1, y: +2 }, { ...piece, kind: PieceKind.Knight }, r)
+			this.pushIfInBounds(pos, { x: +1, y: +2 }, { ...piece, kind: PieceKind.Knight }, r)
+			this.pushIfInBounds(pos, { x: -1, y: -2 }, { ...piece, kind: PieceKind.Knight }, r)
+			this.pushIfInBounds(pos, { x: +1, y: -2 }, { ...piece, kind: PieceKind.Knight }, r)
+			this.pushIfInBounds(pos, { x: +2, y: -1 }, { ...piece, kind: PieceKind.Knight }, r)
+			this.pushIfInBounds(pos, { x: +2, y: +1 }, { ...piece, kind: PieceKind.Knight }, r)
+			this.pushIfInBounds(pos, { x: -2, y: -1 }, { ...piece, kind: PieceKind.Knight }, r)
+			this.pushIfInBounds(pos, { x: -2, y: +1 }, { ...piece, kind: PieceKind.Knight }, r)
 
 			for (let p of r) {
 				if (this.get(p) !== null && this.get(p).kind === PieceKind.Knight) {
@@ -302,10 +345,10 @@ export class Board {
 		}
 
 		{
-			let dir = lowColor === piece.color ? -1 : +1
+			let dir = this.lowColor === piece.color ? -1 : +1
 			let r: Position[] = []
-			this.pushIfInBounds(pos, {x: -1, y: dir}, {...piece, kind: PieceKind.Pawn}, r)
-			this.pushIfInBounds(pos, {x: +1, y: dir}, {...piece, kind: PieceKind.Pawn}, r)
+			this.pushIfInBounds(pos, { x: -1, y: dir }, { ...piece, kind: PieceKind.Pawn }, r)
+			this.pushIfInBounds(pos, { x: +1, y: dir }, { ...piece, kind: PieceKind.Pawn }, r)
 
 			for (let p of r) {
 				if (this.get(p) !== null && this.get(p).kind === PieceKind.Knight) {
