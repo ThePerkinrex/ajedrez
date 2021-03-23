@@ -120,26 +120,6 @@ export class Board {
 		return true
 	}
 
-	willKingBeInCheck(oldpos: Position, newpos: Position): boolean {
-		let boardClone = this.clone()
-		let p = boardClone.get(oldpos)
-		boardClone.set(oldpos, null)
-		boardClone.set(newpos, p)
-		boardClone.move(oldpos, newpos)
-		if (p.color === this.lowColor) {
-			console.log(boardClone.lowKing, boardClone.get(boardClone.lowKing))
-			if (boardClone.isKingInCheck(boardClone.lowKing, boardClone.get(boardClone.lowKing))) {
-				return true
-			}
-		}else {
-			console.log(boardClone.topKing, boardClone.get(boardClone.topKing))
-			if (boardClone.isKingInCheck(boardClone.topKing, boardClone.get(boardClone.topKing))) {
-				return true
-			}
-		}
-		return false
-	}
-
 	private inBounds(pos: Position, relPos: Position, p: Piece, canEat: boolean = true): Position | null {
 		let newX = pos.x + relPos.x;
 		let newY = pos.y + relPos.y;
@@ -204,7 +184,7 @@ export class Board {
 		}
 	}
 
-	possibleMoves(pos: Position, piece: Piece, lowColor: PieceColor): Position[] {
+	possibleMoves(pos: Position, piece: Piece): Position[] {
 		let r: Position[] = []
 		let t = this
 		function pushIfInBounds(relPos: Position, l: Position[], canEat: boolean = true) {
@@ -261,7 +241,7 @@ export class Board {
 				break;
 
 			case PieceKind.Pawn:
-				let dir = lowColor === piece.color ? -1 : +1
+				let dir = this.lowColor === piece.color ? -1 : +1
 				pushIfInBounds({ x: 0, y: dir }, r, false)
 				if (piece.firstMove) {
 					pushIfInBounds({ x: 0, y: dir * 2 }, r, false)
@@ -278,7 +258,7 @@ export class Board {
 				let rightPos = this.inBounds(pos, right, piece)
 				if (rightPos !== null) {
 					let p = this.get(rightPos)
-					console.log(p, rightPos)
+					// console.log(p, rightPos)
 					if (p !== null && p.color !== piece.color) {
 						pushIfInBounds(right, r)
 					}
@@ -288,6 +268,38 @@ export class Board {
 		}
 		r = r.filter(newpos => !this.willKingBeInCheck(pos, newpos))
 		return r
+	}
+
+	isCheckmate(king: PieceColor): boolean {
+		let count = 0
+		for(let y = 0; y < 8; y++) {
+			for (let x = 0; x < 8; x++) {
+				if (this.get({x, y}) !== null && this.get({x, y}).color === king) {
+					count += this.possibleMoves({x, y}, this.get({x, y})).length
+				}
+			}
+		}
+		return count === 0
+	}
+
+	willKingBeInCheck(oldpos: Position, newpos: Position): boolean {
+		let boardClone = this.clone()
+		let p = boardClone.get(oldpos)
+		boardClone.set(oldpos, null)
+		boardClone.set(newpos, p)
+		boardClone.move(oldpos, newpos)
+		if (p.color === this.lowColor) {
+			// console.log(boardClone.lowKing, boardClone.get(boardClone.lowKing))
+			if (boardClone.isKingInCheck(boardClone.lowKing, boardClone.get(boardClone.lowKing))) {
+				return true
+			}
+		}else {
+			// console.log(boardClone.topKing, boardClone.get(boardClone.topKing))
+			if (boardClone.isKingInCheck(boardClone.topKing, boardClone.get(boardClone.topKing))) {
+				return true
+			}
+		}
+		return false
 	}
 
 	isKingInCheck(pos: Position, piece: Piece): boolean {

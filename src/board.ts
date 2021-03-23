@@ -1,7 +1,7 @@
 
 import * as p5 from 'p5';
 import { PieceKind, Piece, PieceColor, getImagePath } from './piece';
-import { onMove, move } from './firebase';
+import { onMove, move, replay as replayGame, onReplay } from './firebase';
 import { Position, Board, toLocalFromGlobal, fromLocalToGlobal, containsPosition } from './moves';
 
 const SQUARE_SIZE = 50;
@@ -15,6 +15,8 @@ let other_player = ''
 let current_player = ''
 let lowColor: PieceColor;
 let currentLow: boolean;
+let lastCheckmate: PieceColor | null = null;
+let checkmate: PieceColor | null = null;
 
 // let check: {
 // 	pos: Position,
@@ -83,6 +85,15 @@ const sketch = (p: p5): void => {
 	onMove(document.getElementById('current-game').innerText, (m) => {
 		movePiece(m.from, m.to)
 	})
+
+	onReplay(document.getElementById('current-game').innerText, () => {
+		document.getElementById('replay').classList.add('hidden')
+		board = Board.default(lowColor)
+		checkmate = null
+		lastCheckmate = null
+		currentlyMoving = undefined
+		currentLow = lowColor == PieceColor.Light
+	})
 	// p.windowResized = (): void => {
 	// 	p.resizeCanvas(p.windowWidth, p.windowHeight);
 	// };
@@ -92,6 +103,9 @@ const sketch = (p: p5): void => {
 		p.push();
 		let top_text = other_player;
 		if (board.isKingInCheck(board.topKing, board.get(board.topKing))) {
+			if (board.isCheckmate(lowColor === PieceColor.Light ? PieceColor.Dark : PieceColor.Light)) {
+				checkmate = lowColor === PieceColor.Light ? PieceColor.Dark : PieceColor.Light
+			}
 			top_text += ' (In check)'
 		}
 		p.fill(255);
@@ -105,6 +119,9 @@ const sketch = (p: p5): void => {
 		p.push();
 		let bottom_text = current_player;
 		if (board.isKingInCheck(board.lowKing, board.get(board.lowKing))) {
+			if (board.isCheckmate(lowColor)) {
+				checkmate = lowColor
+			}
 			bottom_text += ' (In check)'
 		}
 		p.fill(255);
@@ -145,6 +162,34 @@ const sketch = (p: p5): void => {
 			}
 			p.pop()
 		}
+		if (checkmate !== null) {
+			if (checkmate === PieceColor.Light) {
+				p.push();
+				p.fill(255);
+				p.strokeWeight(5)
+				p.stroke(0)
+				p.textStyle(p.BOLD)
+				p.text("Black wins!", (p.width - p.textWidth("Black wins")) / 2, p.height/2);
+				p.pop();
+			} else {
+				p.push();
+				p.fill(255);
+				p.strokeWeight(5)
+				p.stroke(0)
+				p.textStyle(p.BOLD)
+				p.text("White wins!", (p.width - p.textWidth("White wins")) / 2, p.height/2);
+				p.pop();
+			}
+			if (lastCheckmate === null) {
+				let replay = document.getElementById('replay')
+				replay.onclick = () => {
+					replayGame(document.getElementById('current-game').innerText)
+				}
+				replay.classList.remove('hidden')
+				
+			}
+		}
+		lastCheckmate = checkmate
 		// scene.draw(p);
 	};
 
@@ -159,44 +204,46 @@ const sketch = (p: p5): void => {
 	}
 
 	function onPress() {
-		let x = p.floor((p.mouseX - SIDE_PADDING - 5) / SQUARE_SIZE)
-		let y = p.floor((p.mouseY - PADDING - 5) / SQUARE_SIZE)
-		console.log(x, y)
-		if (x >= 8 || y >= 8 || x < 0 || y < 0) {
-			return
-		}
-		if (currentlyMoving !== undefined) {
-			if (containsPosition(currentlyMoving.placeable, { x, y })) {
-				// if (board[y][x] !== null) {
-				// 	let top_eater = board[y][x].color === lowColor
-				// 	if (top_eater) {
-				// 		eatenPieces.top.push(board[y][x])
-				// 	} else {
+		if (checkmate === null) {
+			let x = p.floor((p.mouseX - SIDE_PADDING - 5) / SQUARE_SIZE)
+			let y = p.floor((p.mouseY - PADDING - 5) / SQUARE_SIZE)
+			// console.log(x, y)
+			if (x >= 8 || y >= 8 || x < 0 || y < 0) {
+				return
+			}
+			if (currentlyMoving !== undefined) {
+				if (containsPosition(currentlyMoving.placeable, { x, y })) {
+					// if (board[y][x] !== null) {
+					// 	let top_eater = board[y][x].color === lowColor
+					// 	if (top_eater) {
+					// 		eatenPieces.top.push(board[y][x])
+					// 	} else {
 
-				// 		eatenPieces.bottom.push(board[y][x])
+					// 		eatenPieces.bottom.push(board[y][x])
+					// 	}
+					// }
+					// board[y][x] = board[currentlyMoving.startY][currentlyMoving.startX]
+					// board[currentlyMoving.startY][currentlyMoving.startX] = null
+					// board[y][x].firstMove = false
+					move(document.getElementById('current-game').innerText, {
+						from: fromLocalToGlobal(currentlyMoving.start, lowColor),
+						to: fromLocalToGlobal({ x, y }, lowColor),
+						color: lowColor
+					})
+					currentlyMoving = undefined
+				}
+
+			} else if (currentLow && board.get({ x, y }) !== null && board.get({ x, y }).color === lowColor) {
+				// if (check !== undefined && check.low == currentLow) {
+				// 	if (board[y][x].kind !== PieceKind.King) {
+				// 		return
 				// 	}
 				// }
-				// board[y][x] = board[currentlyMoving.startY][currentlyMoving.startX]
-				// board[currentlyMoving.startY][currentlyMoving.startX] = null
-				// board[y][x].firstMove = false
-				move(document.getElementById('current-game').innerText, {
-					from: fromLocalToGlobal(currentlyMoving.start, lowColor),
-					to: fromLocalToGlobal({ x, y }, lowColor),
-					color: lowColor
-				})
-				currentlyMoving = undefined
-			}
-
-		} else if (currentLow && board.get({ x, y }) !== null && board.get({ x, y }).color === lowColor) {
-			// if (check !== undefined && check.low == currentLow) {
-			// 	if (board[y][x].kind !== PieceKind.King) {
-			// 		return
-			// 	}
-			// }
-			currentlyMoving = {
-				start: { x, y },
-				piece: board.get({ x, y }),
-				placeable: board.possibleMoves({ x, y }, board.get({ x, y }), lowColor)
+				currentlyMoving = {
+					start: { x, y },
+					piece: board.get({ x, y }),
+					placeable: board.possibleMoves({ x, y }, board.get({ x, y }))
+				}
 			}
 		}
 
@@ -226,26 +273,12 @@ function movePieceGeneric(from: Position, to: Position, board: Board, eatenPiece
 		}
 	}
 	let queenRow = (((board.get(from_local).color === lowColor) ? 0 : 7) === to_local.y) && board.get(from_local).kind === PieceKind.Pawn
-	console.log(queenRow)
-	board.set(to_local,queenRow? {...board.get(from_local), kind: PieceKind.Queen} : board.get(from_local))
+	// console.log(queenRow)
+	board.set(to_local, queenRow ? { ...board.get(from_local), kind: PieceKind.Queen } : board.get(from_local))
 	board.set(from_local, null)
 	board.get(to_local).firstMove = false
 	board.move(from_local, to_local) // Notify the board of a piece moved (for kings)
-	// Check for check / checkmate
-	// if (set_check) {
-	// 	for (let p of board.possibleMoves(to_local, board.get(to_local), lowColor)) {
-	// 		// let [x, y] = p.split(':').map((s) => parseInt(s))
-	// 		// console.log('Check', to_local.x, to_local.y, x, y)
-	// 		if (board.get(p) !== null && board.get(p).kind == PieceKind.King && board.get(p).color !== board.get(to_local).color) {
-	// 			check = {
-	// 				pos: p, low: board.get(p).color === lowColor
-	// 			}
-	// 		}
-	// 	}
-	// }
-
 }
-
 export function start(o: string, c: string, low_color: PieceColor) {
 	other_player = o
 	current_player = c

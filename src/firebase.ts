@@ -43,7 +43,7 @@ function signout() {
 
 let current_game: null | string = null;
 
-function leaveCurrentGame() {
+export function leaveCurrentGame() {
 	if (current_game !== null) {
 		leaveGame(current_game)
 	}
@@ -157,6 +157,17 @@ export function onMove(code: string, onMove: (m: Move) => void) {
 	});
 }
 
+export function onReplay(code: string, onReplay: () => void) {
+	firebase.database().ref('running_games/' + code).on('child_removed', (data) => {
+		if (data.key === 'moves')
+			onReplay()
+	});
+}
+
 export function move(code: string, m: Move) {
 	firebase.database().ref('running_games/' + code + '/moves').push().set(m)
+}
+
+export function replay(code: string) {
+	firebase.database().ref('running_games/' + code + '/moves').remove().then(() => console.log('Removed succesfully'), e => console.error('Replay error', e))
 }
