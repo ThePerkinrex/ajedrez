@@ -15,6 +15,7 @@ let other_player = ''
 let current_player = ''
 let lowColor: PieceColor;
 let currentLow: boolean;
+let lastStart: boolean;
 let lastCheckmate: PieceColor | null = null;
 let checkmate: PieceColor | null = null;
 
@@ -92,7 +93,9 @@ const sketch = (p: p5): void => {
 		checkmate = null
 		lastCheckmate = null
 		currentlyMoving = undefined
-		currentLow = lowColor == PieceColor.Light
+		currentLow = !lastStart
+		lastStart = currentLow // Make the one who didn't start last time start
+		eatenPieces = { top: [], bottom: [] }
 	})
 	// p.windowResized = (): void => {
 	// 	p.resizeCanvas(p.windowWidth, p.windowHeight);
@@ -284,6 +287,7 @@ export function start(o: string, c: string, low_color: PieceColor) {
 	current_player = c
 	lowColor = low_color
 	currentLow = low_color == PieceColor.Light
+	lastStart = currentLow
 	new p5(sketch);
 }
 
