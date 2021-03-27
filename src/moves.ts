@@ -64,6 +64,7 @@ export class Board {
 			[buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor), buildPiece(PieceKind.Pawn, lowColor)],
 			[buildPiece(PieceKind.Rook, lowColor), buildPiece(PieceKind.Knight, lowColor), buildPiece(PieceKind.Bishop, lowColor), buildPiece(PieceKind.Queen, lowColor), buildPiece(PieceKind.King, lowColor), buildPiece(PieceKind.Bishop, lowColor), buildPiece(PieceKind.Knight, lowColor), buildPiece(PieceKind.Rook, lowColor)],
 		]
+		
 		r.topKing = { x: 4, y: 0 }
 		r.lowKing = { x: 4, y: 7 }
 		r.lowColor = lowColor
@@ -334,6 +335,7 @@ export class Board {
 			this.slide2Dir(pos, Direction2Dim.Negative, +1, { ...piece, kind: PieceKind.Bishop }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
 			this.slide2Dir(pos, Direction2Dim.Negative, -1, { ...piece, kind: PieceKind.Bishop }, [], (p) => { if (t.get(p) !== null && (t.get(p).kind === PieceKind.Bishop || t.get(p).kind === PieceKind.Queen)) r = true })
 			if (r) {
+				console.log('Queen / Bishop / Rook')
 				return true
 			}
 		}
@@ -351,6 +353,7 @@ export class Board {
 
 			for (let p of r) {
 				if (this.get(p) !== null && this.get(p).kind === PieceKind.Knight) {
+					console.log('Knight')
 					return true
 				}
 			}
@@ -363,7 +366,8 @@ export class Board {
 			this.pushIfInBounds(pos, { x: +1, y: dir }, { ...piece, kind: PieceKind.Pawn }, r)
 
 			for (let p of r) {
-				if (this.get(p) !== null && this.get(p).kind === PieceKind.Knight) {
+				if (this.get(p) !== null && this.get(p).kind === PieceKind.Pawn) {
+					console.log('Pawn')
 					return true
 				}
 			}
